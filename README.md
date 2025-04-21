@@ -9,3 +9,4 @@ branches with examples:
 - sudoku_solver - solving sudoku from text file
 - virtual_filesystem - simulates a basic filesystem
 - contacts_manager - simple app which stores contacts
+- concurrent_counter_server - A simple TCP server where multiple clients can connect and increment a global counter.
