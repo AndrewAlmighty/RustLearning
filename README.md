@@ -10,3 +10,4 @@ branches with examples:
 - virtual_filesystem - simulates a basic filesystem
 - contacts_manager - simple app which stores contacts
 - concurrent_counter_server - A simple TCP server where multiple clients can connect and increment a global counter.
+- thread_pool_executor - simple thread pool that accepts tasks (FnOnce()) and let workers do job. Uses MPSC.
