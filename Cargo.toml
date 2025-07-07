@@ -1,0 +1,8 @@
+[package]
+name = "concurent_file_indexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crossbeam = "0.8.4"
+dashmap = "6.1.0"
