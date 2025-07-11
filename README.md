@@ -13,3 +13,4 @@ branches with examples:
 - thread_pool_executor - simple thread pool that accepts tasks (FnOnce()) and let workers do job. Uses MPSC.
 - concurent_file_indexer - Walks a directory recursively, and for each file, spawns a task/thread to compute metadata. CrossBeam and Dashmap.
 - timer_scheduler - simple timer scheduler where users can set timers with a message and duration. When the time is up, the message is printed.
+- log_file_merger - merge multiple log files into one.
