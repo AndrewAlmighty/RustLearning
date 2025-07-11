@@ -1,0 +1,8 @@
+[package]
+name = "logs_merger"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rayon = "1.1.0"
+chrono = "0.4.41"

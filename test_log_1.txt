@@ -1,0 +1,44 @@
+2025-07-11T08:15:23Z INFO Starting service initialization
+2025-07-11T08:16:00Z DEBUG Loading configuration file
+2025-07-11T08:16:45Z WARN Configuration file missing optional field 'timeout'
+2025-07-11T08:17:10Z INFO Service initialized successfully
+2025-07-11T08:18:05Z ERROR Failed to connect to database
+2025-07-11T08:18:20Z INFO Retrying database connection
+2025-07-11T08:19:00Z INFO Database connection established
+2025-07-11T08:20:00Z DEBUG Starting request processing loop
+2025-07-11T08:21:15Z INFO Request received: GET /api/data
+2025-07-11T08:21:30Z INFO Request processed successfully
+2025-07-11T08:22:05Z DEBUG Checking cache for key 'user_123'
+2025-07-11T08:22:45Z INFO Cache miss for key 'user_123'
+2025-07-11T08:23:00Z INFO Fetching user data from database
+2025-07-11T08:23:15Z INFO User data fetched successfully
+2025-07-11T08:24:00Z WARN Slow query detected in database
+2025-07-11T08:24:30Z DEBUG Starting background job 'cleanup_temp_files'
+2025-07-11T08:25:00Z INFO Background job 'cleanup_temp_files' completed
+2025-07-11T08:25:30Z ERROR Failed to send email notification
+2025-07-11T08:26:00Z INFO Email service restarted
+2025-07-11T08:26:30Z INFO User login successful: user_123
+2025-07-11T08:27:00Z DEBUG Session token generated
+2025-07-11T08:27:45Z INFO User data updated for user_123
+2025-07-11T08:28:15Z WARN Disk space low on partition /dev/sda1
+2025-07-11T08:28:45Z INFO Starting disk cleanup task
+2025-07-11T08:29:30Z INFO Disk cleanup task completed
+2025-07-11T08:30:00Z DEBUG Reloading service configuration
+2025-07-11T08:30:30Z INFO Configuration reload successful
+2025-07-11T08:31:00Z ERROR Unhandled exception in worker thread
+2025-07-11T08:31:30Z INFO Worker thread restarted
+2025-07-11T08:32:00Z INFO Health check passed
+2025-07-11T08:32:30Z WARN High memory usage detected
+2025-07-11T08:33:00Z DEBUG Garbage collection started
+2025-07-11T08:33:30Z INFO Garbage collection completed
+2025-07-11T08:34:00Z INFO Scheduled maintenance starting
+2025-07-11T08:35:00Z INFO Scheduled maintenance completed
+2025-07-11T08:35:30Z DEBUG Starting performance metrics logging
+2025-07-11T08:36:00Z INFO Performance metrics logged successfully
+2025-07-11T08:36:30Z WARN Deprecated API usage detected
+2025-07-11T08:37:00Z INFO User logout successful: user_123
+2025-07-11T08:37:30Z DEBUG Clearing user session data
+2025-07-11T08:38:00Z ERROR Failed to write to log file
+2025-07-11T08:38:30Z INFO Log file permissions updated
+2025-07-11T08:39:00Z INFO Service shutting down
+2025-07-11T08:40:00Z INFO Service shutdown completed
