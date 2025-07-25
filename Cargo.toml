@@ -1,0 +1,11 @@
+[package]
+name = "process_scheduler_simulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+clap = { version = "4.5", features = ["derive"] }
+chrono = "0.4"
+rand = "0.9"
+async-trait = "0.1.88"
