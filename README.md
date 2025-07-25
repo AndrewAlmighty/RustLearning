@@ -14,3 +14,5 @@ branches with examples:
 - concurent_file_indexer - Walks a directory recursively, and for each file, spawns a task/thread to compute metadata. CrossBeam and Dashmap.
 - timer_scheduler - simple timer scheduler where users can set timers with a message and duration. When the time is up, the message is printed.
 - log_file_merger - merge multiple log files into one.
+
+- process_scheduler_simulator - app which simulates how processes are executed in realtime. Few algorithms to choose.
