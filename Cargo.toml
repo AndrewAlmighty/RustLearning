@@ -1,6 +1,13 @@
 [package]
-name = "chat_server"
+name = "chat_app"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread", "time", "sync", "net", "io-util"] }
+clap = { version = "4.5", features = ["derive"] }
+async-trait = "0.1.88"
+bincode = { version = "2.0.1", features = ["derive", "serde"] }
+chrono = "0.4"
+crossterm = "0.29"
+ratatui = "0.29"
