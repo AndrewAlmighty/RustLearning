@@ -16,3 +16,4 @@ branches with examples:
 - log_file_merger - merge multiple log files into one.
 
 - process_scheduler_simulator - app which simulates how processes are executed in realtime. Few algorithms to choose.
+- chat_server - simple chat server which allows to clients messages with simple ui.
