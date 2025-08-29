@@ -17,3 +17,4 @@ branches with examples:
 
 - process_scheduler_simulator - app which simulates how processes are executed in realtime. Few algorithms to choose.
 - chat_server - simple chat server which allows to clients messages with simple ui.
+- p2p_torrent - simple app where peers can share files in p2p network.
