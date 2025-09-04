@@ -1,0 +1,9 @@
+[package]
+name = "terminal_game_engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossterm = "0.29"
+ratatui = "0.29"
+rand = "0.9.2"
