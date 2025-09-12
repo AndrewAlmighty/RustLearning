@@ -19,3 +19,4 @@ branches with examples:
 - chat_server - simple chat server which allows to clients messages with simple ui.
 - p2p_torrent - simple app where peers can share files in p2p network.
 - terminal_game_engine - simple termina game engine with 3 games: snake, tetris and breakout
+- galaxy_simulation - simple galaxy simulator. Tell how much particles you want and magic happens
