@@ -1,10 +1,13 @@
 pub mod log;
+pub mod packet;
+mod packet_source;
 
 use crate::log::*;
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{Ordering};
+//use std::sync::atomic::{AtomicBool, Ordering};
+//use std::sync::Arc;
 
 #[derive(clap::Parser)]
 pub struct Config {
@@ -26,7 +29,5 @@ fn main() {
     }
 
     let logger_is_running = logger.run();
-    log!("app", log::Level::Error, "Testujemy".to_string());
-    std::thread::sleep(std::time::Duration::from_secs(1));
     logger_is_running.store(false, Ordering::Relaxed);
 }
