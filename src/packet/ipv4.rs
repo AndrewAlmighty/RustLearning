@@ -95,6 +95,50 @@ impl IPv4Header {
     pub fn get_length(&self) -> usize {
         (self.ihl as usize) * 4
     }
+
+    pub fn get_dscp(&self) -> u8 {
+        self.dscp
+    }
+
+    pub fn get_ecn(&self) -> Ecn {
+        self.ecn
+    }
+
+    pub fn get_total_length(&self) -> u16 {
+        self.total_length
+    }
+
+    pub fn get_identification(&self) -> u16 {
+        self.identification
+    }
+
+    pub fn get_flags(&self) -> u8 {
+        self.flags
+    }
+
+    pub fn get_fragment_offset(&self) -> u16 {
+        self.fragment_offset
+    }
+
+    pub fn get_time_to_live(&self) -> u8 {
+        self.time_to_live
+    }
+
+    pub fn get_header_checksum(&self) -> u16 {
+        self.header_checksum
+    }
+
+    pub fn get_source_address(&self) -> &Ipv4Addr {
+        &self.src_address
+    }
+
+    pub fn get_destination_address(&self) -> &Ipv4Addr {
+        &self.dst_address
+    }
+
+    pub fn get_options(&self) -> &Vec<u8> {
+        &self.options
+    }
 }
 
 #[test]

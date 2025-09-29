@@ -5,7 +5,7 @@ use std::net::Ipv6Addr;
 const MIN_IPV6_HEADER_LEN: usize = 40;
 
 #[derive(PartialEq, Debug)]
-enum ExtensionHeader {
+pub enum ExtensionHeader {
     HopByHopOpts(Vec<u8>),
     Routing(Vec<u8>),
     Fragment(Vec<u8>),
@@ -105,7 +105,6 @@ impl IPv6Header {
         let protocol: ProtocolKind;
 
         loop {
-            println!("next_header_val: {}", next_header_val);
             let header_begin_at = next_header_begin_idx;
             match next_header_val {
                 0 => { (next_header_val, next_header_begin_idx) = parse_extension(8 + ((bytes[header_begin_at + 1] as usize) * 8), header_begin_at, ExtensionHeader::HopByHopOpts)?; }
@@ -128,6 +127,38 @@ impl IPv6Header {
             ExtensionHeader::Fragment(v) |
             ExtensionHeader::AuthenticationHeader(v) |
             ExtensionHeader::DestinationOptions(v) => v.len() }).sum::<usize>() + MIN_IPV6_HEADER_LEN
+    }
+
+    pub fn get_dscp(&self) -> u8 {
+        self.dscp
+    }
+
+    pub fn get_ecn(&self) -> Ecn {
+        self.ecn
+    }
+
+    pub fn get_flow_label(&self) -> u32 {
+        self.flow_label
+    }
+
+    pub fn get_payload_length(&self) -> u16 {
+        self.payload_length
+    }
+    
+    pub fn get_hop_limit(&self) -> u8 {
+        self.hop_limit
+    }
+
+    pub fn get_source_address(&self) -> &Ipv6Addr {
+        &self.src_addr
+    }
+
+    pub fn get_destination_address(&self) -> &Ipv6Addr {
+        &self.dst_addr
+    }
+
+    pub fn get_extension_headers(&self) -> &Vec<ExtensionHeader> {
+        &self.extension_headers
     }
 }
 

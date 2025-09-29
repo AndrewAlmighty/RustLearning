@@ -38,8 +38,24 @@ impl UdpHeader {
         })
     }
 
-    pub fn get_length() -> usize {
+    pub fn get_udp_length() -> usize {
         UDP_HEADER_LEN
+    }
+
+    pub fn get_source_port(&self) -> u16 {
+        self.src_port
+    }
+
+    pub fn get_destination_port(&self) -> u16 {
+        self.dst_port
+    }
+
+    pub fn get_length(&self) -> u16 {
+        self.length
+    }
+
+    pub fn get_checksum(&self) -> u16 {
+        self.checksum
     }
 }
 

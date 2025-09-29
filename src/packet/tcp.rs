@@ -3,7 +3,7 @@ use crate::packet::PacketError;
 const MINIMAL_TCP_HEADER_LEN: usize = 20;
 
 #[derive(PartialEq, Debug)]
-enum Flag {
+pub enum Flag {
     Cwr,
     Ece,
     Urg,
@@ -18,6 +18,11 @@ enum Flag {
 pub struct TcpOption {
     kind: u8,
     value: Vec<u8>
+}
+
+impl TcpOption {
+    pub fn get_kind(&self) -> u8 { self.kind }
+    pub fn get_value(&self) -> &Vec<u8> { &self.value }
 }
 
 #[derive(Debug, PartialEq)]
@@ -116,7 +121,7 @@ impl TcpHeader {
         MINIMAL_TCP_HEADER_LEN + options_len
     }
 
-    fn get_flags(&self) -> Vec<Flag> {
+    pub fn get_flags(&self) -> Vec<Flag> {
         const ALL_POSSIBLE_FLAGS_LEN: usize = 8;
         const MASKS_FLAGS: [(u8, Flag); ALL_POSSIBLE_FLAGS_LEN] = [
             (0b10000000, Flag::Cwr),
@@ -138,6 +143,42 @@ impl TcpHeader {
 
         flags.shrink_to_fit();
         flags
+    }
+
+    pub fn get_source_port(&self) -> u16 {
+        self.src_port
+    }
+
+    pub fn get_destination_port(&self) -> u16 {
+        self.dst_port
+    }
+
+    pub fn get_sequence_number(&self) -> u32 {
+        self.seq_num
+    }
+
+    pub fn get_acknowledgment_number(&self) -> u32 {
+        self.ack_num
+    }
+
+    pub fn get_nonce_sum(&self) -> bool {
+        self.nonce_sum
+    }
+
+    pub fn get_window(&self) -> u16 {
+        self.window
+    }
+
+    pub fn get_checksum(&self) -> u16 {
+        self.checksum
+    }
+
+    pub fn get_urgent_ptr(&self) -> Option<u16> {
+        self.urgent_ptr.clone()
+    }
+
+    pub fn get_options(&self) -> &Vec<TcpOption> {
+        &self.options
     }
 }
 

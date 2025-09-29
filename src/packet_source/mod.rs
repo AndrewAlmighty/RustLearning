@@ -1,3 +1,11 @@
-// dwa typy - generator - generuje az do momentu stop i pcap reader - tutaj albo zapetlamy, albo tylko raz odczytujemy
-//pub trait PacketSource {
-//}
+pub mod packet_factory;
+
+use crate::packet_queue::PacketQueue;
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::thread::JoinHandle;
+
+pub trait PacketSource {
+    fn run(self, name: String, packet_queue: Arc<dyn PacketQueue>, running: Arc<AtomicBool>) -> JoinHandle<()>;
+}
