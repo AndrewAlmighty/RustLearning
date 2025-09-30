@@ -19,6 +19,7 @@ pub enum PacketError {
     EthFrameTooShort(usize),
     UnsupportedEtherType(u16),
     CannotCreateMac(bool, String), // bool - is_dst
+
     Ipv4WrongVersion(u8),
     Ipv4TooShort(usize),
     Ipv4WrongIhl(u8),

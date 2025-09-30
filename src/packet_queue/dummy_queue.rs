@@ -9,6 +9,7 @@ pub struct DummyQueue {
 }
 
 impl DummyQueue {
+    #[allow(dead_code)]
     pub fn create() -> Self {
         DummyQueue { received_packets: AtomicUsize::new(0) }
     }

@@ -497,7 +497,7 @@ mod tests {
         let factory = PacketFactory::create(10000, 25000, 100, 100, 10).expect("Factory should be created for test");
         let running_flag = Arc::new(AtomicBool::new(true));
         let start = Instant::now();
-        let joiner = factory.run("TestUnlimitedPacketsGenerator".to_string(), Arc::clone(&dummy_queue), Arc::clone(&running_flag));
+        let joiner = factory.run("TestLimitedPacketsGenerator".to_string(), Arc::clone(&dummy_queue), Arc::clone(&running_flag));
         let _ = joiner.join();
         assert!(start.elapsed().as_millis() < 2600);
         let created_packets = dummy_queue.get_queued_packets_count();

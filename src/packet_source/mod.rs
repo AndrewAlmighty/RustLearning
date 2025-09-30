@@ -1,4 +1,5 @@
 pub mod packet_factory;
+pub mod pcap_reader;
 
 use crate::packet_queue::PacketQueue;
 
