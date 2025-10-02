@@ -73,6 +73,7 @@ impl Logger {
             "error" => assert!(LOGGING_LEVEL.set(Level::Error).is_ok()),
             "info" => assert!(LOGGING_LEVEL.set(Level::Info).is_ok()),
             "debug" => assert!(LOGGING_LEVEL.set(Level::Debug).is_ok()),
+            "trace" => assert!(LOGGING_LEVEL.set(Level::Trace).is_ok()),
             unexpected => { return Err(std::io::Error::new(std::io::ErrorKind::Unsupported, format!("Not such logging level: {}", unexpected))); }
         }
         let (tx, rx) = std::sync::mpsc::channel::<Log>();

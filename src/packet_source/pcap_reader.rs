@@ -9,6 +9,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use std::time::{Instant, Duration};
 
@@ -20,14 +21,14 @@ pub struct PcapReader {
 }
 
 impl PcapReader {
-    pub fn create(pcap: PathBuf, packets_per_seconds: u16, loop_reading: bool) -> Result<Self, String> {
-        const PACKETS_PER_SECONDS_MAX_LIMIT: u16 = 10000;
+    pub fn create(pcap: PathBuf, packets_per_second: u64, loop_reading: bool) -> Result<Self, String> {
+        const PACKETS_PER_SECONDS_MAX_LIMIT: u64 = 10000;
 
-        if packets_per_seconds > PACKETS_PER_SECONDS_MAX_LIMIT {
-            return Err(format!("Cannot create PcapReader - requested to create {} packets per second, which is above limit: {}", packets_per_seconds, PACKETS_PER_SECONDS_MAX_LIMIT));
+        if packets_per_second > PACKETS_PER_SECONDS_MAX_LIMIT {
+            return Err(format!("Cannot create PcapReader - requested to create {} packets per second, which is above limit: {}", packets_per_second, PACKETS_PER_SECONDS_MAX_LIMIT));
         }
 
-        if packets_per_seconds == 0 {
+        if packets_per_second == 0 {
             return Err("Cannot create PcapReader - packets per second must be bigger than 0".to_string());
         }
 
@@ -60,7 +61,7 @@ impl PcapReader {
         }
 
         const MICROSECONDS_IN_SECOND: u64 = 1_000_000;
-        let packet_creation_interval = MICROSECONDS_IN_SECOND / (packets_per_seconds as u64);
+        let packet_creation_interval = MICROSECONDS_IN_SECOND / packets_per_second;
 
         Ok(PcapReader {pcap: file, packet_creation_interval: Duration::from_micros(packet_creation_interval), loop_reading: loop_reading, packet_record_header_buf: [0u8; 16]} )
     }
@@ -161,10 +162,10 @@ impl PcapReader {
 }
 
 impl PacketSource for PcapReader {
-    fn run(mut self, name: String, packet_queue: Arc<dyn PacketQueue>, running: Arc<AtomicBool>) -> JoinHandle<()> {
+    fn run(mut self: Box<Self>, id: u8, packet_queue: Arc<dyn PacketQueue>, running: Arc<AtomicBool>, is_finished_sender: Sender<u8>) -> JoinHandle<()> {
         std::thread::spawn(move || {
             let mut packets_created = 0usize;
-            log!("PcapReader", log::Level::Debug, format!("{} started work. Interval: {} us, loop_reading: {}", name, self.packet_creation_interval.as_micros(), self.loop_reading));
+            log!("PcapReader", log::Level::Debug, format!("[ID:{}] Started work. Interval: {} us, loop_reading: {}", id, self.packet_creation_interval.as_micros(), self.loop_reading));
 
             let mut next_tick = Instant::now();
             while running.load(Ordering::Relaxed) {
@@ -183,12 +184,15 @@ impl PacketSource for PcapReader {
                         }
                     }
                     Err(e) => {
-                        log!("PcapReader", log::Level::Error, format!("{} Could not create packet: {:?}", name, e));
+                        log!("PcapReader", log::Level::Error, format!("[ID:{}] Could not create packet: {:?}", id, e));
                     }
                 }
             }
 
-            log!("PcapReader", log::Level::Debug, format!("{} finished work. Created packets count: {}", name, packets_created));
+            log!("PcapReader", log::Level::Debug, format!("[ID:{}] Finished work. Created packets count: {}", id, packets_created));
+            if let Err(e) = is_finished_sender.send(id) {
+                panic!("Pcap reader with ID: {} could not inform about finished work. Error: {}", id, e);
+            }
         })
     }
 }
@@ -197,16 +201,17 @@ impl PacketSource for PcapReader {
 mod tests {
     use super::*;
     use crate::log::test_init::get_logger;
+    use crate::packet_queue::dummy_queue::DummyQueue;
 
     #[test]
     fn test_reading_pcap_file_no_loop_read() {
-        use crate::packet_queue::dummy_queue::DummyQueue;
+        let (tx, _rx) = std::sync::mpsc::channel::<u8>();
         let _ = get_logger();
         let dummy_queue: Arc<dyn PacketQueue> = Arc::new(DummyQueue::create());
-        let pcap_reader = PcapReader::create(PathBuf::from("test_sample.pcap"), 1, false).expect("Pcap reader should be created for test");
+        let pcap_reader: Box<dyn PacketSource> = Box::new(PcapReader::create(PathBuf::from("test_sample.pcap"), 1, false).expect("Pcap reader should be created for test"));
         let running_flag = Arc::new(AtomicBool::new(true));
         let start = Instant::now();
-        let joiner = pcap_reader.run("PcapReaderTestNoLoop".to_string(), Arc::clone(&dummy_queue), Arc::clone(&running_flag));
+        let joiner = pcap_reader.run(1, Arc::clone(&dummy_queue), Arc::clone(&running_flag), tx);
         let _ = joiner.join();
         assert!(start.elapsed().as_millis() < 4100);
         assert_eq!(dummy_queue.get_queued_packets_count(), 4);
@@ -214,12 +219,12 @@ mod tests {
 
     #[test]
     fn test_reading_pcap_file_loop_read() {
-        use crate::packet_queue::dummy_queue::DummyQueue;
         let _ = get_logger();
         let dummy_queue: Arc<dyn PacketQueue> = Arc::new(DummyQueue::create());
-        let pcap_reader = PcapReader::create(PathBuf::from("test_sample.pcap"), 10, true).expect("Pcap reader should be created for test");
+        let pcap_reader: Box<dyn PacketSource> = Box::new(PcapReader::create(PathBuf::from("test_sample.pcap"), 10, true).expect("Pcap reader should be created for test"));
         let running_flag = Arc::new(AtomicBool::new(true));
-        let joiner = pcap_reader.run("PcapReaderTestNoLoop".to_string(), Arc::clone(&dummy_queue), Arc::clone(&running_flag));
+        let (tx, _rx) = std::sync::mpsc::channel::<u8>();
+        let joiner = pcap_reader.run(2, Arc::clone(&dummy_queue), Arc::clone(&running_flag), tx);
         std::thread::sleep(Duration::from_millis(2001));
         running_flag.store(false, Ordering::Relaxed);
         let _ = joiner.join();

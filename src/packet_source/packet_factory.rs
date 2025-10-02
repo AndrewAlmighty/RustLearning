@@ -5,6 +5,7 @@ use crate::log::*;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use std::time::{Instant, Duration};
 
@@ -51,14 +52,14 @@ impl Host {
 }
 
 pub struct PacketFactory {
-    packet_max_limit: usize,
+    packets_limit: usize,
     creation_interval: Duration,
     ipv4_hosts: Vec<Host>,
     ipv6_hosts: Vec<Host>
 }
 
 impl PacketFactory {
-    pub fn create(packets_per_seconds: u16, packet_max_limit: usize, ipv4_hosts_number: usize, ipv6_hosts_number: usize, macs_per_host: u8) -> Result<PacketFactory, String> {
+    pub fn create(packets_per_second: u64, packets_limit: usize, ipv4_hosts_number: usize, ipv6_hosts_number: usize, macs_per_host: usize) -> Result<Self, String> {
         fn generate_mac_address(rng: &mut ThreadRng) -> Vec<u8> {
             let mut mac_bytes = Vec::<u8>::with_capacity(6);
             for _ in 0..6 {
@@ -77,13 +78,21 @@ impl PacketFactory {
             bytes
         }
 
-        const PACKETS_PER_SECONDS_MAX_LIMIT: u16 = 10000;
-        if packets_per_seconds > PACKETS_PER_SECONDS_MAX_LIMIT {
-            return Err(format!("Cannot create PacketFactory - requested to create {} packets per second, which is above limit: {}", packets_per_seconds, PACKETS_PER_SECONDS_MAX_LIMIT));
+        const PACKETS_PER_SECONDS_MAX_LIMIT: u64 = 10000;
+        if packets_per_second > PACKETS_PER_SECONDS_MAX_LIMIT {
+            return Err(format!("Cannot create PacketFactory - requested to create {} packets per second, which is above limit: {}", packets_per_second, PACKETS_PER_SECONDS_MAX_LIMIT));
         }
 
-        if packets_per_seconds == 0 {
+        if packets_per_second == 0 {
             return Err("Cannot create PacketFactory - packets per second must be bigger than 0".to_string());
+        }
+
+        if ipv4_hosts_number > 1000 {
+            return Err("Cannot create PacketFactory - ipv4_hosts_number limit is 1000".to_string());
+        }
+
+        if ipv6_hosts_number > 1000 {
+            return Err("Cannot create PacketFactory - ipv6_hosts_number limit is 1000".to_string());
         }
 
         if ipv4_hosts_number == 0 && ipv6_hosts_number == 0 {
@@ -93,6 +102,11 @@ impl PacketFactory {
         if macs_per_host == 0 {
             return Err("Cannot create PacketFactory - every host should have at least one mac address".to_string());
         }
+
+        if macs_per_host > 10 {
+            return Err("Cannot create PacketFactory - macs_per_host limit is 10".to_string());
+        }
+
 
         let mut rng = rand::rng();
         let mut ipv4_hosts: Vec<Host> = if ipv4_hosts_number == 0 { Vec::new() } else { Vec::with_capacity(ipv4_hosts_number) };
@@ -107,8 +121,8 @@ impl PacketFactory {
         }
 
         const MICROSECONDS_IN_SECOND: u64 = 1_000_000;
-        let packet_creation_interval = MICROSECONDS_IN_SECOND / (packets_per_seconds as u64);
-        Ok(PacketFactory {packet_max_limit: packet_max_limit, creation_interval: Duration::from_micros(packet_creation_interval), ipv4_hosts: ipv4_hosts, ipv6_hosts: ipv6_hosts })
+        let packet_creation_interval = MICROSECONDS_IN_SECOND / packets_per_second;
+        Ok(PacketFactory {packets_limit: packets_limit, creation_interval: Duration::from_micros(packet_creation_interval), ipv4_hosts: ipv4_hosts, ipv6_hosts: ipv6_hosts })
     }
 
     fn generate_packet_bytes(&self, mut rng: &mut ThreadRng) -> Vec<u8> {
@@ -257,11 +271,11 @@ impl PacketFactory {
 }
 
 impl PacketSource for PacketFactory {
-    fn run(self, name: String, packet_queue: Arc<dyn PacketQueue>, running: Arc<AtomicBool>) -> JoinHandle<()> {
+    fn run(self: Box<Self>, id: u8, packet_queue: Arc<dyn PacketQueue>, running: Arc<AtomicBool>, is_finished_sender: Sender<u8>) -> JoinHandle<()> {
         std::thread::spawn(move || {
             let mut rng = rand::rng();
             let mut packets_created = 0usize;
-            log!("PacketGenerator", log::Level::Debug, format!("{} started work. Packet limit: {}, interval: {} us, ipv4 addresses: {}, ipv6 addresses: {}", name, self.packet_max_limit, self.creation_interval.as_micros(), self.ipv4_hosts.len(), self.ipv6_hosts.len()));
+            log!("PacketGenerator", log::Level::Debug, format!("[ID:{}] Started work. Packet limit: {}, interval: {} us, ipv4 addresses: {}, ipv6 addresses: {}", id, self.packets_limit, self.creation_interval.as_micros(), self.ipv4_hosts.len(), self.ipv6_hosts.len()));
 
             let mut next_tick = Instant::now();
             while running.load(Ordering::Relaxed) {
@@ -271,18 +285,21 @@ impl PacketSource for PacketFactory {
                         packet_queue.push(packet);
                     }
                     Err(e) => {
-                        log!("PacketGenerator", log::Level::Error, format!("{} Could not create packet: {:?}", name, e));
+                        log!("PacketGenerator", log::Level::Error, format!("[ID:{}] Could not create packet: {:?}", id, e));
                     }
                 }
 
-                if self.packet_max_limit != 0 && packets_created >= self.packet_max_limit { break; }
+                if self.packets_limit != 0 && packets_created >= self.packets_limit { break; }
                 next_tick += self.creation_interval;
                 if let Some(remaining) = next_tick.checked_duration_since(Instant::now()) {
                     std::thread::sleep(remaining);
                 }
             }
 
-            log!("PacketGenerator", log::Level::Debug, format!("{} finished work. Created packets count: {}", name, packets_created));
+            log!("PacketGenerator", log::Level::Debug, format!("[ID:{}] finished work. Created packets count: {}", id, packets_created));
+            if let Err(e) = is_finished_sender.send(id) {
+                panic!("Packet generator with ID: {} could not inform about finished work. Error: {}", id, e);
+            }
         })
     }
 }
@@ -291,6 +308,7 @@ impl PacketSource for PacketFactory {
 mod tests {
     use super::*;
     use crate::log::test_init::get_logger;
+    use crate::packet_queue::dummy_queue::DummyQueue;
 
     fn generate_some_random_packets(factory: PacketFactory, ipv4_addresses_count: &mut usize, ipv6_addresses_count: &mut usize, mac_addresses_count: &mut usize, had_ipv4_tcp: &mut bool, had_ipv4_udp: &mut bool, had_ipv6_tcp: &mut bool, had_ipv6_udp: &mut bool) {
         use crate::packet::{EtherType, Protocol};
@@ -476,12 +494,12 @@ mod tests {
 
     #[test]
     fn run_with_unlimited_packets() {
-        use crate::packet_queue::dummy_queue::DummyQueue;
+        let (tx, _rx) = std::sync::mpsc::channel::<u8>();
         let _ = get_logger();
         let dummy_queue: Arc<dyn PacketQueue> = Arc::new(DummyQueue::create());
-        let factory = PacketFactory::create(100, 0, 100, 100, 10).expect("Factory should be created for test");
+        let factory: Box<dyn PacketSource> = Box::new(PacketFactory::create(100, 0, 100, 100, 10).expect("Factory should be created for test"));
         let running_flag = Arc::new(AtomicBool::new(true));
-        let joiner = factory.run("TestUnlimitedPacketsGenerator".to_string(), Arc::clone(&dummy_queue), Arc::clone(&running_flag));
+        let joiner = factory.run(4, Arc::clone(&dummy_queue), Arc::clone(&running_flag), tx);
         std::thread::sleep(Duration::from_secs(2));
         running_flag.store(false, Ordering::Relaxed);
         let _ = joiner.join();
@@ -491,13 +509,13 @@ mod tests {
 
     #[test]
     fn run_with_limited_packets() {
-        use crate::packet_queue::dummy_queue::DummyQueue;
+        let (tx, _rx) = std::sync::mpsc::channel::<u8>();
         let _ = get_logger();
         let dummy_queue: Arc<dyn PacketQueue> = Arc::new(DummyQueue::create());
-        let factory = PacketFactory::create(10000, 25000, 100, 100, 10).expect("Factory should be created for test");
+        let factory: Box<dyn PacketSource> = Box::new(PacketFactory::create(10000, 25000, 100, 100, 10).expect("Factory should be created for test"));
         let running_flag = Arc::new(AtomicBool::new(true));
         let start = Instant::now();
-        let joiner = factory.run("TestLimitedPacketsGenerator".to_string(), Arc::clone(&dummy_queue), Arc::clone(&running_flag));
+        let joiner = factory.run(3, Arc::clone(&dummy_queue), Arc::clone(&running_flag), tx);
         let _ = joiner.join();
         assert!(start.elapsed().as_millis() < 2600);
         let created_packets = dummy_queue.get_queued_packets_count();
