@@ -11,6 +11,7 @@ use ipv6::IPv6Header;
 use chrono::{DateTime, Utc};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::net::IpAddr;
 
 pub type MacAddress = [u8; 6];
 
@@ -124,10 +125,10 @@ impl Packet {
             else if current_idx == bytes_len { Vec::new() }
             else { return Err(PacketError::EthFrameTooShort(bytes_len)); };
 
-        PACKET_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let id = PACKET_COUNTER.fetch_add(1, Ordering::Relaxed);
 
         Ok(Packet {
-            id: PACKET_COUNTER.load(Ordering::Relaxed),
+            id: id,
             timestamp: Utc::now(),
             src_mac: src_mac,
             dst_mac: dst_mac,
@@ -151,6 +152,28 @@ impl Packet {
 
     pub fn get_destination_mac(&self) -> &MacAddress {
         &self.dst_mac
+    }
+
+    pub fn get_source_address(&self) -> IpAddr {
+        match &self.ethertype{
+            EtherType::Ipv4(hdr) => {
+                IpAddr::V4(hdr.get_source_address().clone())
+            }
+            EtherType::Ipv6(hdr) => {
+                IpAddr::V6(hdr.get_source_address().clone())
+            }
+        }
+    }
+
+    pub fn get_destination_address(&self) -> IpAddr {
+        match &self.ethertype{
+            EtherType::Ipv4(hdr) => {
+                IpAddr::V4(hdr.get_destination_address().clone())
+            }
+            EtherType::Ipv6(hdr) => {
+                IpAddr::V6(hdr.get_destination_address().clone())
+            }
+        }
     }
 
     pub fn get_ethertype(&self) -> &EtherType {

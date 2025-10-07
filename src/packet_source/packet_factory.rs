@@ -282,7 +282,7 @@ impl PacketSource for PacketFactory {
                 match  Packet::create(self.generate_packet_bytes(&mut rng)) {
                     Ok(packet) => {
                         packets_created += 1;
-                        packet_queue.push(packet);
+                        packet_queue.push(Box::new(packet));
                     }
                     Err(e) => {
                         log!("PacketGenerator", log::Level::Error, format!("[ID:{}] Could not create packet: {:?}", id, e));

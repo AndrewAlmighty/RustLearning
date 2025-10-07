@@ -174,10 +174,10 @@ impl PacketSource for PcapReader {
                     break;
                 }
 
-                match  Packet::create(packet_bytes) {
+                match Packet::create(packet_bytes) {
                     Ok(packet) => {
                         packets_created += 1;
-                        packet_queue.push(packet);
+                        packet_queue.push(Box::new(packet));
                         next_tick += self.packet_creation_interval;
                         if let Some(remaining) = next_tick.checked_duration_since(Instant::now()) {
                             std::thread::sleep(remaining);

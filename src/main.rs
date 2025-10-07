@@ -8,6 +8,7 @@ use crate::packet_source::PacketSource;
 use crate::packet_source::packet_factory::PacketFactory;
 use crate::packet_source::pcap_reader::PcapReader;
 use crate::packet_queue::PacketQueue;
+use crate::packet_queue::ring_buffer::RingBuffer;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,6 +22,8 @@ pub struct Config {
     log_level: String,
     #[arg(long, help = "Path to log file")]
     log_file: Option<PathBuf>,
+    #[arg(long, help = "Size of the packet queue (must be power of two)")]
+    queue_size: u32,
     #[arg(long, required = true, help = "\
         Packet sources described in json. You can provide multiple packet sources, each will run in different thread. Types:\n\
         - factory - will create packets with random bytes, with specific settings. Options:\n\
@@ -41,7 +44,7 @@ pub struct Config {
     packet_sources: String
 }
 
-fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>), String> {
+fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>, Arc<dyn PacketQueue>), String> {
     let logger = match Logger::create(config.log_file, config.log_level) {
         Ok(l) => l,
         Err(e) => { return Err(format!("Error when creating logger: {}", e)); }
@@ -115,18 +118,23 @@ fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>), 
         return Err("At least one packet source is required".to_string());
     }
 
-    Ok((logger, packet_sources))
+    let packet_queue: Arc<dyn PacketQueue> = match RingBuffer::create(config.queue_size) {
+        Ok(ring_buffer) => Arc::new(ring_buffer),
+        Err(e) => { return Err(e); }
+    };
+
+    Ok((logger, packet_sources, packet_queue))
 }
 
 fn main() {
     let config = <Config as clap::Parser>::parse();
-    let (logger, packet_sources) = match parse_config(config) {
+    let (logger, packet_sources, packet_queue) = match parse_config(config) {
         Err(e) => {
             println!("{}", e);
             return;
         }
 
-        Ok((logger, packet_sources)) => (logger, packet_sources),
+        Ok((logger, packet_sources, packet_queue)) => (logger, packet_sources, packet_queue),
     };
 
     let packet_sources_running_flag = Arc::new(AtomicBool::new(true));
@@ -136,11 +144,9 @@ fn main() {
     }).expect("Error setting Ctrl-C handler");
 
     let logger_is_packet_sources_running_flag = logger.run();
-
-    let packet_queue: Arc<dyn PacketQueue> = Arc::new(crate::packet_queue::dummy_queue::DummyQueue::create());
     let (is_finished_sender, is_finished_receiver) = std::sync::mpsc::channel::<u8>();
 
-    log!("App", log::Level::Info, "Starting work.".to_string());
+    log!("App", log::Level::Info, "Starting work. Send SIGINT to stop.".to_string());
     let mut packet_sources_join_handlers = HashMap::with_capacity(packet_sources.len());
     
     for (i, packet_source) in packet_sources.into_iter().enumerate() {
@@ -162,7 +168,8 @@ fn main() {
         }
     }
 
-    log!("App", log::Level::Info, format!("Packet queue received: {} packets.", packet_queue.get_queued_packets_count()));
+    log!("App", log::Level::Info, format!("Packet queue accepted {} packets.", packet_queue.get_queued_packets_count()));
+    log!("App", log::Level::Info, format!("Packet queue dropped {} packets.", packet_queue.get_dropped_packets_count()));
     log!("App", log::Level::Info, "Finished work.".to_string());
     std::thread::sleep(std::time::Duration::from_millis(1));
     logger_is_packet_sources_running_flag.store(false, Ordering::Relaxed);
