@@ -72,7 +72,8 @@ pub struct Packet {
     dst_mac:  MacAddress,
     ethertype: EtherType,
     protocol: Option<Protocol>,
-    payload: Vec<u8>
+    payload: Vec<u8>,
+    total_bytes: usize
 }
 
 impl Packet {
@@ -134,7 +135,8 @@ impl Packet {
             dst_mac: dst_mac,
             ethertype: ethertype,
             protocol: protocol,
-            payload: payload
+            payload: payload,
+            total_bytes: bytes_len
         })
     }
 
@@ -146,12 +148,12 @@ impl Packet {
         &self.timestamp
     }
 
-    pub fn get_source_mac(&self) -> &MacAddress {
-        &self.src_mac
+    pub fn get_source_mac(&self) -> MacAddress {
+        self.src_mac
     }
 
-    pub fn get_destination_mac(&self) -> &MacAddress {
-        &self.dst_mac
+    pub fn get_destination_mac(&self) -> MacAddress {
+        self.dst_mac
     }
 
     pub fn get_source_address(&self) -> IpAddr {
@@ -186,6 +188,10 @@ impl Packet {
 
     pub fn get_payload(&self) -> &Vec<u8> {
         &self.payload
+    }
+
+    pub fn get_length(&self) -> usize {
+        self.total_bytes
     }
 }
 

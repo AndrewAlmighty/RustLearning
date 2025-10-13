@@ -3,6 +3,7 @@ pub mod packet;
 mod packet_source;
 mod packet_queue;
 mod packet_processor;
+mod host_cache;
 
 use crate::log::*;
 use crate::packet_source::PacketSource;

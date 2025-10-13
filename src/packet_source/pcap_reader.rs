@@ -208,7 +208,7 @@ mod tests {
         let (tx, _rx) = std::sync::mpsc::channel::<u8>();
         let _ = get_logger();
         let dummy_queue: Arc<dyn PacketQueue> = Arc::new(DummyQueue::create());
-        let pcap_reader: Box<dyn PacketSource> = Box::new(PcapReader::create(PathBuf::from("test_sample.pcap"), 1, false).expect("Pcap reader should be created for test"));
+        let pcap_reader: Box<dyn PacketSource> = Box::new(PcapReader::create(PathBuf::from("basic_packet_test.pcap"), 1, false).expect("Pcap reader should be created for test"));
         let running_flag = Arc::new(AtomicBool::new(true));
         let start = Instant::now();
         let joiner = pcap_reader.run(1, Arc::clone(&dummy_queue), Arc::clone(&running_flag), tx);
@@ -221,7 +221,7 @@ mod tests {
     fn test_reading_pcap_file_loop_read() {
         let _ = get_logger();
         let dummy_queue: Arc<dyn PacketQueue> = Arc::new(DummyQueue::create());
-        let pcap_reader: Box<dyn PacketSource> = Box::new(PcapReader::create(PathBuf::from("test_sample.pcap"), 10, true).expect("Pcap reader should be created for test"));
+        let pcap_reader: Box<dyn PacketSource> = Box::new(PcapReader::create(PathBuf::from("basic_packet_test.pcap"), 10, true).expect("Pcap reader should be created for test"));
         let running_flag = Arc::new(AtomicBool::new(true));
         let (tx, _rx) = std::sync::mpsc::channel::<u8>();
         let joiner = pcap_reader.run(2, Arc::clone(&dummy_queue), Arc::clone(&running_flag), tx);
