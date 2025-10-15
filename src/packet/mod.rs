@@ -15,6 +15,11 @@ use std::net::IpAddr;
 
 pub type MacAddress = [u8; 6];
 
+pub fn mac_to_string(mac: MacAddress) -> String {
+    format!("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
+}
+
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum PacketError {
     EthFrameTooShort(usize),

@@ -1,7 +1,7 @@
 mod entry;
 
 use crate::log::*;
-use crate::packet::{MacAddress, Packet};
+use crate::packet::{MacAddress, Packet, mac_to_string};
 use crate::host_cache::entry::Entry;
 
 use std::hash::{Hash, Hasher};
@@ -121,7 +121,7 @@ impl HostCache {
                     self.miss_count.fetch_add(1, Ordering::Relaxed);
                     let prev_size = self.current_size.fetch_add(1, Ordering::Relaxed);
                     debug_assert!(prev_size < self.capacity);
-                    log!("HostCache", log::Level::Debug, format!("Created new entry for MAC: {:?}, idx: {}", mac, idx));
+                    log!("HostCache", log::Level::Debug, format!("Created new entry for MAC: {}, idx: {}", mac_to_string(mac), idx));
                     return;
                 }
                 else {
@@ -145,12 +145,12 @@ impl HostCache {
                 let slot = self.buckets.add(idx_with_oldest_timestamp);
                 let old_entry_ptr = *slot;
                 assert!(!old_entry_ptr.is_null());
-                log!("HostCache", log::Level::Debug, format!("Removing entry with mac: {:?}. It's idx: {}, timestamp {}", (*old_entry_ptr).get_key(), idx_with_oldest_timestamp, oldest_timestamp));
+                log!("HostCache", log::Level::Debug, format!("Removing entry with mac: {:?}. It's idx: {}, timestamp {}", mac_to_string((*old_entry_ptr).get_key()), idx_with_oldest_timestamp, oldest_timestamp));
                 std::ptr::drop_in_place(old_entry_ptr);
                 std::ptr::write(old_entry_ptr, Entry::create(mac));
                 (*old_entry_ptr).update(&packet);
                 self.miss_count.fetch_add(1, Ordering::Relaxed);
-                log!("HostCache", log::Level::Debug, format!("Created new entry for MAC: {:?}, idx: {} after removing old one.", mac, idx));
+                log!("HostCache", log::Level::Debug, format!("Created new entry for MAC: {:?}, idx: {} after removing old one.", mac_to_string(mac), idx));
                 return;
             }
         }
@@ -170,7 +170,7 @@ impl HostCache {
                     if entry.get_key() == mac {
                         entry.update(packet);
                         self.hits_count.fetch_add(1, Ordering::Relaxed);
-                        log!("HostCache", log::Level::Trace, format!("Updated entry with mac: {:?}. It's idx: {}", mac, idx));
+                        log!("HostCache", log::Level::Trace, format!("Updated entry with mac: {}. It's idx: {}", mac_to_string(mac), idx));
                         return true;
                     }
                 }
@@ -201,7 +201,7 @@ impl HostCache {
         }
 
         entries_data.shrink_to_fit();
-        log!("HostCache", log::Level::Info, format!("\nCurrent cache status\nHits:{}\nMisses: {}\nRejections: {}\nEntries:\n{}\n",
+        log!("HostCache", log::Level::Info, format!("\nCurrent cache status\nHits: {}\nMisses: {}\nRejections: {}\nEntries:\n{}\n",
             self.hits_count.load(Ordering::Relaxed), self.miss_count.load(Ordering::Relaxed), self.rejected_count.load(Ordering::Relaxed), entries_data.join("\n")));
 
         self.locked.store(false, Ordering::Release);

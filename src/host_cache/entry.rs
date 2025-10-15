@@ -1,4 +1,4 @@
-use crate::packet::{MacAddress, Packet, Protocol, EtherType};
+use crate::packet::{MacAddress, Packet, Protocol, EtherType, mac_to_string};
 
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -171,15 +171,15 @@ impl Entry {
 impl Display for Entry {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let connections_data_info = self.connections_data.iter().map(|el| format!("{}", el.value())).collect::<Vec<_>>();
-        write!(f, "Mac: {:?}: total packets: {} total bytes: {}, last updated: {}. Connections:\n{}",
-            self.key, self.total_packets.load(Ordering::Relaxed), self.total_bytes.load(Ordering::Relaxed), self.last_updated.load(Ordering::Relaxed), connections_data_info.join("\n"))
+        write!(f, "Mac: {}:\ntotal packets: {} total bytes: {}, last updated: {}. Connections:\n{}\n",
+            mac_to_string(self.key), self.total_packets.load(Ordering::Relaxed), self.total_bytes.load(Ordering::Relaxed), self.last_updated.load(Ordering::Relaxed), connections_data_info.join("\n"))
     }
 }
 
 impl Display for ConnectionData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}: local: {}:{}, remote: {}:{}, total_bytes: {}, tcp_packets: {}, tcp_payload: {}, udp_packets: {}, udp_payload: {}",
-            self.remote_mac, self.local_address, self.local_port, self.remote_address, self.remote_port, self.total_bytes.load(Ordering::Relaxed),
+            mac_to_string(self.remote_mac), self.local_address, self.local_port, self.remote_address, self.remote_port, self.total_bytes.load(Ordering::Relaxed),
             self.tcp_packets.load(Ordering::Relaxed), self.tcp_payload.load(Ordering::Relaxed), self.udp_packets.load(Ordering::Relaxed), self.udp_payload.load(Ordering::Relaxed))
     }
 }

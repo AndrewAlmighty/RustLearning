@@ -12,12 +12,14 @@ use crate::packet_source::pcap_reader::PcapReader;
 use crate::packet_queue::PacketQueue;
 use crate::packet_queue::ring_buffer::RingBuffer;
 use crate::packet_processor::PacketProcessor;
+use crate::host_cache::HostCache;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
+use std::time::{Instant, Duration};
 use std::thread::JoinHandle;
 
 use serde::Deserialize;
@@ -30,6 +32,12 @@ pub struct Config {
     log_file: Option<PathBuf>,
     #[arg(long, help = "Size of the packet queue (must be power of two)")]
     queue_size: u32,
+    #[arg(long, help = "Size of the hosts cache (must be power of two)")]
+    cache_size: usize,
+    #[arg(long, help = "Time (in seconds) after entry will be marked as expired if it not updated for some time. It will be replaced to store a new host data")]
+    expiration_time: u8,
+    #[arg(long, help = "Collect data from cache and print a report every <report-interval> seconds")]
+    report_interval: u8,
     #[arg(long, help = "Number of packet processors which will handle packets from queue")]
     packet_processors: u8,
     #[arg(long, required = true, help = "\
@@ -52,7 +60,7 @@ pub struct Config {
     packet_sources: String
 }
 
-fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>, Arc<dyn PacketQueue>, Vec<PacketProcessor>), String> {
+fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>, Arc<dyn PacketQueue>, Vec<PacketProcessor>, Arc<AtomicBool>, JoinHandle<()>), String> {
     let logger = match Logger::create(config.log_file, config.log_level) {
         Ok(l) => l,
         Err(e) => { return Err(format!("Error when creating logger: {}", e)); }
@@ -82,7 +90,7 @@ fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>, A
         packets_limit: usize,
         ipv4_hosts: usize,
         ipv6_hosts: usize,
-        macs_per_host: usize
+        macs_per_host: usize,
     }
 
     #[derive(Deserialize)]
@@ -135,9 +143,29 @@ fn parse_config(config: Config) -> Result<(Logger, Vec<Box<dyn PacketSource>>, A
         Err(e) => { return Err(e); }
     };
 
-    let packet_processors = (0..config.packet_processors).map(|i| PacketProcessor::create(i)).collect::<Vec<_>>();
+    let cache = match HostCache::create(config.cache_size, config.expiration_time) {
+        Ok(c) => Arc::new(c),
+        Err(e) => { return Err(e); }
+    };
 
-    Ok((logger, packet_sources, packet_queue, packet_processors))
+    let packet_processors = (0..config.packet_processors).map(|i| PacketProcessor::create(i, Arc::clone(&cache))).collect::<Vec<_>>();
+    let report_interval = Duration::from_secs(config.report_interval as u64);
+    let cache_monitor_running = Arc::new(AtomicBool::new(true));
+    let r = Arc::clone(&cache_monitor_running);
+    let monitor_joiner = std::thread::spawn(move || {
+        let mut last_report_time = Instant::now();
+        while r.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_millis(100));
+            if report_interval < Instant::now().duration_since(last_report_time) {
+                cache.print_cache_data();
+                last_report_time = Instant::now();
+            }
+        }
+
+        cache.print_cache_data();
+    });
+
+    Ok((logger, packet_sources, packet_queue, packet_processors, cache_monitor_running, monitor_joiner))
 }
 
 fn wait_for_processes_end(mut join_handlers: HashMap<u8, JoinHandle<()>>, is_finished_receiver: Receiver<u8>, handle_packet_sources: bool) {
@@ -165,13 +193,13 @@ fn wait_for_processes_end(mut join_handlers: HashMap<u8, JoinHandle<()>>, is_fin
 
 fn main() {
     let config = <Config as clap::Parser>::parse();
-    let (logger, packet_sources, packet_queue, packet_processors) = match parse_config(config) {
+    let (logger, packet_sources, packet_queue, packet_processors, cache_monitor_running, monitor_joiner) = match parse_config(config) {
         Err(e) => {
             println!("{}", e);
             return;
         }
 
-        Ok((logger, packet_sources, packet_queue, packet_processors)) => (logger, packet_sources, packet_queue, packet_processors),
+        Ok((logger, packet_sources, packet_queue, packet_processors, cache_monitor_running, monitor_joiner)) => (logger, packet_sources, packet_queue, packet_processors, cache_monitor_running, monitor_joiner),
     };
 
     let packet_sources_running_flag = Arc::new(AtomicBool::new(true));
@@ -206,9 +234,12 @@ fn main() {
     packet_processors_running_flag.store(false, Ordering::Relaxed);
     wait_for_processes_end(packet_processors_join_handlers, packet_processor_is_finished_receiver, false);
 
+    cache_monitor_running.store(false, Ordering::Relaxed);
+    let _ = monitor_joiner.join();
+
     log!("App", log::Level::Info, format!("Packet queue accepted {} packets.", packet_queue.get_queued_packets_count()));
     log!("App", log::Level::Info, format!("Packet queue dropped {} packets.", packet_queue.get_dropped_packets_count()));
     log!("App", log::Level::Info, "Finished work.".to_string());
-    std::thread::sleep(std::time::Duration::from_millis(1));
+    std::thread::sleep(Duration::from_secs(1)); // give some time to print everything
     logger_is_packet_sources_running_flag.store(false, Ordering::Relaxed);
 }

@@ -107,7 +107,6 @@ impl PacketFactory {
             return Err("Cannot create PacketFactory - macs_per_host limit is 10".to_string());
         }
 
-
         let mut rng = rand::rng();
         let mut ipv4_hosts: Vec<Host> = if ipv4_hosts_number == 0 { Vec::new() } else { Vec::with_capacity(ipv4_hosts_number) };
         let mut ipv6_hosts: Vec<Host> = if ipv6_hosts_number == 0 { Vec::new() } else { Vec::with_capacity(ipv6_hosts_number) };
@@ -178,8 +177,14 @@ impl PacketFactory {
 
     fn generate_tcp_header_bytes(&self, rng: &mut ThreadRng) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(GENERATED_TCP_HEADER_LEN);
-        for _ in 0..12 {
-            bytes.push(rng.random_range(0..=255)); // ports, seq & ack num
+        for _ in 0..2 {
+            let port_bytes = (rng.random_range(5000..=5005) as u16).to_be_bytes();
+            bytes.push(port_bytes[0]);
+            bytes.push(port_bytes[1]);
+        }
+    
+        for _ in 0..8 {
+            bytes.push(rng.random_range(0..=255)); // seq & ack num
         }
 
         bytes.push(0b_0101_0000); // data offset & reserved
@@ -193,8 +198,10 @@ impl PacketFactory {
 
     fn generate_udp_header_bytes(&self, rng: &mut ThreadRng) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(GENERATED_UDP_HEADER_LEN);
-        for _ in 0..4 {
-            bytes.push(rng.random_range(0..=255)); // ports
+        for _ in 0..2 {
+            let port_bytes = (rng.random_range(5000..=5005) as u16).to_be_bytes();
+            bytes.push(port_bytes[0]);
+            bytes.push(port_bytes[1]);
         }
         
         let len_bytes = (GENERATED_UDP_HEADER_LEN as u16).to_be_bytes();

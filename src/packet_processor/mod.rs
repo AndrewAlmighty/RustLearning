@@ -1,6 +1,7 @@
 use crate::log::*;
 use crate::packet_queue::PacketQueue;
 use crate::packet::{Packet};
+use crate::host_cache::HostCache;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,13 +10,15 @@ use std::time::{Instant, Duration};
 use std::thread::JoinHandle;
 
 pub struct PacketProcessor {
-    id: u8
+    id: u8,
+    cache: Arc<HostCache>
 }
 
 impl PacketProcessor {
-    pub fn create(id: u8) -> Self {
+    pub fn create(id: u8, cache: Arc<HostCache>) -> Self {
         PacketProcessor { 
-            id: id
+            id: id,
+            cache: cache
         }
     }
 
@@ -25,6 +28,7 @@ impl PacketProcessor {
 
     fn handle_packet(&self, packet: Box<Packet>) {
         log!("PacketProcessor", log::Level::Trace, format!("[ID:{}] handling packet with ID: {}.", self.id, packet.get_id()));
+        self.cache.extract_packet_data(packet);
     }
 
     pub fn run(self, packet_queue: Arc<dyn PacketQueue>, running: Arc<AtomicBool>, is_finished_sender: Sender<u8>) -> JoinHandle<()> {
@@ -61,7 +65,7 @@ impl PacketProcessor {
                 }
             }
 
-            log!("PacketProcessor", log::Level::Debug,
+            log!("PacketProcessor", log::Level::Info,
                 format!("[ID:{}] Finished work. Received {} packets, Average throughput: {:.2} packets per second",
                 self.id, total_received_packets, (total_received_packets as f64) / (Instant::now().duration_since(begin_time).as_secs() as f64)));
 
