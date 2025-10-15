@@ -64,12 +64,14 @@ impl HostCache {
     pub fn extract_packet_data(&self, packet: Box<Packet>) {
         loop {
             if self.locked.load(Ordering::Acquire) {
+                std::hint::spin_loop();
                 continue;
             }
 
             assert!(self.current_updaters.fetch_add(1, Ordering::Relaxed) < 255, "No more threads than 255 are allowed");
             if self.locked.load(Ordering::Acquire) {
                 self.current_updaters.fetch_sub(1, Ordering::Relaxed);
+                std::hint::spin_loop();
                 continue;
             }
 
@@ -85,8 +87,8 @@ impl HostCache {
         self.current_updaters.fetch_sub(1, Ordering::Relaxed);
 
         if !entry_src_mac_updated || !entry_dst_mac_updated {
-            while self.locked.swap(true, Ordering::AcqRel) {}
-            while self.current_updaters.load(Ordering::Acquire) != 0 {}
+            while self.locked.swap(true, Ordering::AcqRel) { std::hint::spin_loop(); }
+            while self.current_updaters.load(Ordering::Acquire) != 0 { std::hint::spin_loop() ;}
 
             if !entry_src_mac_updated {
                 self.update_or_try_insert(src_mac_idx, src_mac, &packet);
@@ -186,8 +188,8 @@ impl HostCache {
     }
 
     pub fn print_cache_data(&self) {
-        while self.locked.swap(true, Ordering::AcqRel) {}
-        while self.current_updaters.load(Ordering::Acquire) != 0 {}
+        while self.locked.swap(true, Ordering::AcqRel) { std::hint::spin_loop(); }
+        while self.current_updaters.load(Ordering::Acquire) != 0 { std::hint::spin_loop(); }
 
         let current_size = self.current_size.load(Ordering::Relaxed);
         let mut entries_data = Vec::with_capacity(current_size);

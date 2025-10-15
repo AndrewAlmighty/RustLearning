@@ -5,15 +5,18 @@ use crate::log::*;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicUsize, AtomicU32, AtomicBool, Ordering};
 
+#[repr(align(64))]
+struct Padded<T>(T);
+
 pub struct RingBuffer {
     buffer: *mut MaybeUninit<Box<Packet>>,
     sequences: Vec<AtomicU32>,
     received_packets: AtomicUsize,
     dropped_packets: AtomicUsize,
-    head: AtomicU32,
-    tail: AtomicU32,
+    head: Padded<AtomicU32>,
+    tail: Padded<AtomicU32>,
     capacity: u32,
-    buffer_is_full: AtomicBool
+    buffer_is_full: Padded<AtomicBool>
 }
 
 impl RingBuffer {
@@ -40,11 +43,11 @@ impl RingBuffer {
             buffer: buffer,
             sequences: sequences,
             capacity: capacity,
-            head: AtomicU32::new(0),
-            tail: AtomicU32::new(0),
+            head: Padded(AtomicU32::new(0)),
+            tail: Padded(AtomicU32::new(0)),
             received_packets: AtomicUsize::new(0),
             dropped_packets: AtomicUsize::new(0),
-            buffer_is_full: AtomicBool::new(false)
+            buffer_is_full: Padded(AtomicBool::new(false))
          })
     }
 }
@@ -54,15 +57,19 @@ unsafe impl Sync for RingBuffer {}
 
 impl PacketQueue for RingBuffer {
     fn push(&self, packet: Box<Packet>) -> bool {
+        let mut spin = 1;
         loop {
-            let head = self.head.load(Ordering::Relaxed);
+            let head = self.head.0.load(Ordering::Relaxed);
             let idx = (head & (self.capacity - 1)) as usize;
             let seq = self.sequences.get(idx).expect(format!("There should be a sequence number. Idx: {}", idx).as_str());
             let diff = (seq.load(Ordering::Acquire) as isize) - (head as isize);
 
             if diff == 0 {
                 let next_head = head.wrapping_add(1);
-                if self.head.compare_exchange_weak(head, next_head, Ordering::AcqRel, Ordering::Relaxed).is_err() {
+                if self.head.0.compare_exchange_weak(head, next_head, Ordering::AcqRel, Ordering::Relaxed).is_err() {
+                    for _ in 0..spin { std::hint::spin_loop(); }
+                    spin = (spin * 2).min(64);
+                    if spin >= 64 { std::thread::yield_now(); }
                     continue;
                 }
 
@@ -85,21 +92,23 @@ impl PacketQueue for RingBuffer {
                 return true;
             }
             else if diff < 0 {
-                if let Ok(false) = self.buffer_is_full.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed) {
+                if let Ok(false) = self.buffer_is_full.0.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed) {
                     log!("RingBuffer", log::Level::Debug, "Ring Buffer reached maximum capacity.".to_string());
                 }
                 self.dropped_packets.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
             else {
+                std::thread::yield_now();
                 continue;
             }
         }
     }
 
     fn pop(&self) -> Option<Box<Packet>> {
+        let mut spin = 1;
         loop {
-            let tail = self.tail.load(Ordering::Relaxed);
+            let tail = self.tail.0.load(Ordering::Relaxed);
             let next_tail = tail.wrapping_add(1);
             let idx = (tail & (self.capacity - 1)) as usize;
             let seq = self.sequences.get(idx).expect(format!("There should be a sequence number. Idx: {}", idx).as_str());
@@ -108,18 +117,23 @@ impl PacketQueue for RingBuffer {
                 return None;
             }
 
-            if self.tail.compare_exchange_weak(tail, next_tail, Ordering::AcqRel, Ordering::Relaxed).is_ok() {
+            if self.tail.0.compare_exchange_weak(tail, next_tail, Ordering::AcqRel, Ordering::Relaxed).is_ok() {
                 let packet = unsafe {
                     self.buffer.add(idx).read().assume_init()
                 };
 
                 seq.store(tail.wrapping_add(self.capacity), Ordering::Release);
 
-                if self.buffer_is_full.load(Ordering::Relaxed) {
-                    self.buffer_is_full.store(false, Ordering::Relaxed);
+                if self.buffer_is_full.0.load(Ordering::Relaxed) {
+                    self.buffer_is_full.0.store(false, Ordering::Relaxed);
                 }
 
                 return Some(packet);
+            }
+            else {
+                for _ in 0..spin { std::hint::spin_loop(); }
+                spin = (spin * 2).min(64);
+                if spin >= 64 { std::thread::yield_now(); }
             }
         }
     }
@@ -165,40 +179,40 @@ mod tests {
         let ring_buffer_creation = RingBuffer::create(8);
         assert!(ring_buffer_creation.is_ok());
         let ring_buffer = ring_buffer_creation.unwrap();
-        assert_eq!(ring_buffer.head.load(Ordering::Relaxed), 0);
-        assert_eq!(ring_buffer.tail.load(Ordering::Relaxed), 0);
-        assert!(!ring_buffer.buffer_is_full.load(Ordering::Relaxed));
+        assert_eq!(ring_buffer.head.0.load(Ordering::Relaxed), 0);
+        assert_eq!(ring_buffer.tail.0.load(Ordering::Relaxed), 0);
+        assert!(!ring_buffer.buffer_is_full.0.load(Ordering::Relaxed));
         assert_eq!(ring_buffer.capacity, 8);
 
         ring_buffer.push(create_packet());
-        assert_eq!(ring_buffer.head.load(Ordering::Relaxed), 1);
-        assert_eq!(ring_buffer.tail.load(Ordering::Relaxed), 0);
-        assert!(!ring_buffer.buffer_is_full.load(Ordering::Relaxed));
+        assert_eq!(ring_buffer.head.0.load(Ordering::Relaxed), 1);
+        assert_eq!(ring_buffer.tail.0.load(Ordering::Relaxed), 0);
+        assert!(!ring_buffer.buffer_is_full.0.load(Ordering::Relaxed));
         assert_eq!(ring_buffer.capacity, 8);
 
         let _ = ring_buffer.pop();
-        assert_eq!(ring_buffer.head.load(Ordering::Relaxed), 1);
-        assert_eq!(ring_buffer.tail.load(Ordering::Relaxed), 1);
+        assert_eq!(ring_buffer.head.0.load(Ordering::Relaxed), 1);
+        assert_eq!(ring_buffer.tail.0.load(Ordering::Relaxed), 1);
         assert_eq!(ring_buffer.capacity, 8);
-        assert!(!ring_buffer.buffer_is_full.load(Ordering::Relaxed));
+        assert!(!ring_buffer.buffer_is_full.0.load(Ordering::Relaxed));
     
         for _ in 0..8 {
             assert!(ring_buffer.push(create_packet()));
         }
 
         assert!(!ring_buffer.push(create_packet()));
-        assert!(ring_buffer.buffer_is_full.load(Ordering::Relaxed));
-        assert_eq!(ring_buffer.head.load(Ordering::Relaxed), 9);
-        assert_eq!(ring_buffer.tail.load(Ordering::Relaxed), 1);
+        assert!(ring_buffer.buffer_is_full.0.load(Ordering::Relaxed));
+        assert_eq!(ring_buffer.head.0.load(Ordering::Relaxed), 9);
+        assert_eq!(ring_buffer.tail.0.load(Ordering::Relaxed), 1);
 
         for _ in 0..8 {
             assert!(ring_buffer.pop().is_some());
-            assert!(!ring_buffer.buffer_is_full.load(Ordering::Relaxed));
+            assert!(!ring_buffer.buffer_is_full.0.load(Ordering::Relaxed));
         }
 
         assert!(ring_buffer.pop().is_none());
-        assert_eq!(ring_buffer.head.load(Ordering::Relaxed), 9);
-        assert_eq!(ring_buffer.tail.load(Ordering::Relaxed), 9);
+        assert_eq!(ring_buffer.head.0.load(Ordering::Relaxed), 9);
+        assert_eq!(ring_buffer.tail.0.load(Ordering::Relaxed), 9);
     }
 
     #[test]
@@ -232,9 +246,9 @@ mod tests {
 
         assert_eq!(buffer.get_queued_packets_count(), buffer_size as usize);
         assert_eq!(buffer.get_dropped_packets_count(), total_packets_to_push - buffer_size as usize);
-        assert!(buffer.buffer_is_full.load(Ordering::Relaxed));
-        assert_eq!(buffer.head.load(Ordering::Relaxed), buffer_size);
-        assert_eq!(buffer.tail.load(Ordering::Relaxed), 0);
+        assert!(buffer.buffer_is_full.0.load(Ordering::Relaxed));
+        assert_eq!(buffer.head.0.load(Ordering::Relaxed), buffer_size);
+        assert_eq!(buffer.tail.0.load(Ordering::Relaxed), 0);
     }
 
     fn ring_buffer_no_double_consume_check(buffer_size: u32, total_packets_to_push: usize, producers_num: usize, consumers_num: usize, expected_dropped_packets: bool) {
@@ -315,15 +329,15 @@ mod tests {
         assert_eq!(*p_ids_set, *c_ids_set);
 
         assert_eq!(total_packets_to_push, buffer.get_queued_packets_count().wrapping_add(dropped_packets_count));
-        assert_eq!(buffer.head.load(Ordering::Relaxed), successfull_push_count.load(Ordering::Relaxed) as u32);
+        assert_eq!(buffer.head.0.load(Ordering::Relaxed), successfull_push_count.load(Ordering::Relaxed) as u32);
 
         if expected_dropped_packets {
             assert!(dropped_packets_count > 0);
             assert_eq!(dropped_packets_count, total_packets_to_push - successfull_push_count.load(Ordering::Relaxed));
-            assert_eq!(buffer.tail.load(Ordering::Relaxed), (total_packets_to_push - dropped_packets_count) as u32);
+            assert_eq!(buffer.tail.0.load(Ordering::Relaxed), (total_packets_to_push - dropped_packets_count) as u32);
         }
         else {
-            assert_eq!(buffer.head.load(Ordering::Relaxed), total_packets_to_push as u32);
+            assert_eq!(buffer.head.0.load(Ordering::Relaxed), total_packets_to_push as u32);
             assert_eq!(successfull_push_count.load(Ordering::Relaxed), total_packets_to_push);
         }
     }
