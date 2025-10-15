@@ -20,3 +20,4 @@ branches with examples:
 - p2p_torrent - simple app where peers can share files in p2p network.
 - terminal_game_engine - simple termina game engine with 3 games: snake, tetris and breakout
 - galaxy_simulation - simple galaxy simulator. Tell how much particles you want and magic happens
+- network_packets_processor - quite big app. Lot's of unsafe things here. Packets are inserted to MPMC ring buffer, from which are picked by other threads in order to put them into some custom Cache.
